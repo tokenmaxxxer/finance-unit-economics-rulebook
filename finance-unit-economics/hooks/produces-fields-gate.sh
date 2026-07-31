@@ -13,9 +13,12 @@ trap __fc EXIT
 #
 # On a write whose resolved target is this role's own record
 # docs/issue-<n>/reports/finance-unit-economics.md, require a section per required field
-# below. Missing any => refuse. Skeleton: field-presence checks are a
-# placeholder (substring/heading match) — harden before treating as
-# load-bearing.
+# below (cac, ltv, ltv-cac-ratio, cac-payback-period, sensitivity-note —
+# per issue-1 phase-2 proposal (b)/(d)). Missing any => refuse. For
+# cac/ltv/cac-payback-period/sensitivity-note, also require an actual
+# numeric token near the field label — a heading with no numbers still
+# fails. Field-presence checks remain substring/heading-match placeholders
+# beyond that — harden further before treating as load-bearing.
 set -uo pipefail
 
 case "${FINANCE_UNIT_ECONOMICS_CYCLE_OFF:-}" in ""|0|false|no|off) ;; *) exit 0 ;; esac
@@ -28,9 +31,14 @@ payload="$(cat 2>/dev/null || true)"
 [ -n "$payload" ] || exit 0
 
 FINANCE_UNIT_ECONOMICS_PAYLOAD="$payload" python3 <<'PY'
-import json, os, sys
+import json, os, re, sys
 
-REQUIRED_FIELDS = ["unit-economics-model", "sensitivity-note"]
+REQUIRED_FIELDS = ["cac", "ltv", "ltv-cac-ratio", "cac-payback-period", "sensitivity-note"]
+# fields whose section must carry an actual numeric token, not just a heading
+# (issue-1 phase-2: closes the gap survey.md/scout-brief.md both flag —
+# label-only sections previously satisfied this gate)
+NUMERIC_REQUIRED_FIELDS = ["cac", "ltv", "cac-payback-period", "sensitivity-note"]
+NUMBER_RE = re.compile(r"[$₩%]|\d")
 RECORD_SUFFIX = "docs/issue-" # + "<n>/reports/finance-unit-economics.md"
 
 def deny(msg):
@@ -58,8 +66,30 @@ content = ""
 if isinstance(ti, dict):
     content = ti.get("content") or ti.get("new_string") or ""
 
-missing = [f for f in REQUIRED_FIELDS if f.replace("-", " ") not in content.lower() and f not in content.lower()]
+lower = content.lower()
+
+def find_field(field):
+    for needle in (field.replace("-", " "), field):
+        idx = lower.find(needle)
+        if idx != -1:
+            return idx
+    return -1
+
+missing = []
+no_numbers = []
+for field in REQUIRED_FIELDS:
+    idx = find_field(field)
+    if idx == -1:
+        missing.append(field)
+        continue
+    if field in NUMERIC_REQUIRED_FIELDS:
+        window = content[idx:idx + 400]
+        if not NUMBER_RE.search(window):
+            no_numbers.append(field)
+
 if missing:
     deny("finance-unit-economics.md is missing required produces field(s): " + ", ".join(missing))
+if no_numbers:
+    deny("finance-unit-economics.md field(s) present as heading only, with no numeric content nearby: " + ", ".join(no_numbers))
 sys.exit(0)
 PY
