@@ -1,0 +1,7 @@
+{
+  "name": "finance-ltv-churn-assumption",
+  "description": "Phase-2 finance-unit-economics check: an LTV figure must state its churn-rate/NDR assumption explicitly.",
+  "author": {
+    "name": "Jung Jiwon & Lee Jongkwan"
+  }
+}

@@ -8,6 +8,36 @@
       "name": "finance-unit-economics",
       "source": "./finance-unit-economics",
       "description": "The finance-unit-economics role on contract v3 (issue-160 round-3 promotion). Decides: 단위경제상 성립하는가."
+    },
+    {
+      "name": "finance-evidence-chain",
+      "source": "./finance-evidence-chain",
+      "description": "Phase-1 finance-unit-economics check: every adopted metric must be sourced or assumption-labeled, and chained to the role's own mandate."
+    },
+    {
+      "name": "finance-proposal-shape",
+      "source": "./finance-proposal-shape",
+      "description": "Phase-1 finance-unit-economics check: proposal must name a concrete phase-2 reflection plan and a Decision requested section."
+    },
+    {
+      "name": "finance-ltv-cac-band",
+      "source": "./finance-ltv-cac-band",
+      "description": "Phase-2 finance-unit-economics check: an LTV:CAC ratio must carry a band judgment, not a bare number."
+    },
+    {
+      "name": "finance-cac-payback",
+      "source": "./finance-cac-payback",
+      "description": "Phase-2 finance-unit-economics check: CAC payback period must show its formula inputs visibly."
+    },
+    {
+      "name": "finance-sensitivity-scenario",
+      "source": "./finance-sensitivity-scenario",
+      "description": "Phase-2 finance-unit-economics check: sensitivity section must carry at least two labeled numeric scenarios."
+    },
+    {
+      "name": "finance-ltv-churn-assumption",
+      "source": "./finance-ltv-churn-assumption",
+      "description": "Phase-2 finance-unit-economics check: an LTV figure must state its churn-rate/NDR assumption explicitly."
     }
   ]
 }

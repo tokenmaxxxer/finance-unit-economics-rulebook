@@ -1,0 +1,7 @@
+{
+  "name": "finance-evidence-chain",
+  "description": "Phase-1 finance-unit-economics check: every adopted metric must be sourced or assumption-labeled, and chained to the role's own mandate.",
+  "author": {
+    "name": "Jung Jiwon & Lee Jongkwan"
+  }
+}

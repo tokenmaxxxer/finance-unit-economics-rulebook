@@ -1,0 +1,7 @@
+{
+  "name": "finance-sensitivity-scenario",
+  "description": "Phase-2 finance-unit-economics check: sensitivity section must carry at least two labeled numeric scenarios.",
+  "author": {
+    "name": "Jung Jiwon & Lee Jongkwan"
+  }
+}
