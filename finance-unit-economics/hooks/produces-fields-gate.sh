@@ -1,9 +1,15 @@
 #!/usr/bin/env bash
 __fc(){ rc=$?; if [ "$rc" != 0 ] && [ "$rc" != 2 ]; then echo "fail-closed: gate aborted (rc=$rc)" >&2; exit 2; fi; }
 trap __fc EXIT
-# PreToolUse gate (Write|Edit|MultiEdit) — contract v3 s20, finance-unit-economics's own
-# required-field set (adapted per issue-170 from roles/finance-unit-economics.json's
-# `produces`, NOT copied from another role's field set).
+# PreToolUse gate (Write|Edit|MultiEdit) — thin, PRODUCES-only remainder of
+# this role's former record-fields-gate.sh (issue-2 core canon reference
+# transition). Core's own record-fields-gate.sh (core issue #66) now covers
+# contract §20's role-agnostic structural minimum (what/why/upstream/
+# loop_state/open-findings) globally; this copy no longer duplicates that
+# logic. It checks ONLY this role's own PRODUCES fields (adapted per
+# issue-170 from roles/finance-unit-economics.json's `produces`), which core's
+# canon copy has no per-role configuration point for (survey.md, "Gap
+# found"; proposal task 4, option (b)).
 #
 # On a write whose resolved target is this role's own record
 # docs/issue-<n>/reports/finance-unit-economics.md, require a section per required field
@@ -16,7 +22,7 @@ case "${FINANCE_UNIT_ECONOMICS_CYCLE_OFF:-}" in ""|0|false|no|off) ;; *) exit 0 
 
 deny() { echo "finance-unit-economics: refused — $*" >&2; exit 2; }
 
-command -v python3 >/dev/null 2>&1 || deny "record-fields-gate.sh requires python3, which is not on PATH; denying rather than guessing."
+command -v python3 >/dev/null 2>&1 || deny "produces-fields-gate.sh requires python3, which is not on PATH; denying rather than guessing."
 
 payload="$(cat 2>/dev/null || true)"
 [ -n "$payload" ] || exit 0
