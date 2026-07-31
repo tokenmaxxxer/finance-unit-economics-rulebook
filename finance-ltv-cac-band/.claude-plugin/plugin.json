@@ -1,0 +1,7 @@
+{
+  "name": "finance-ltv-cac-band",
+  "description": "Phase-2 finance-unit-economics check: an LTV:CAC ratio must carry a band judgment, not a bare number.",
+  "author": {
+    "name": "Jung Jiwon & Lee Jongkwan"
+  }
+}

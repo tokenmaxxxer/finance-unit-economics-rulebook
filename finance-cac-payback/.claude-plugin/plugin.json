@@ -1,0 +1,7 @@
+{
+  "name": "finance-cac-payback",
+  "description": "Phase-2 finance-unit-economics check: CAC payback period must show its formula inputs visibly.",
+  "author": {
+    "name": "Jung Jiwon & Lee Jongkwan"
+  }
+}
