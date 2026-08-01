@@ -1,58 +1,135 @@
 #!/usr/bin/env bash
-__fc(){ rc=$?; if [ "$rc" != 0 ] && [ "$rc" != 2 ]; then echo "fail-closed: gate aborted (rc=$rc)" >&2; exit 2; fi; }
-trap __fc EXIT
 # PreToolUse gate — checks ONLY that a sensitivity/scenario section in
 # the finance-unit-economics record carries at least two distinct
-# labeled numeric scenarios, not a token-only heading. Does not check
-# the LTV:CAC band (finance-ltv-cac-band's job), CAC payback
-# (finance-cac-payback's job), or the churn/NDR assumption behind LTV
-# (finance-ltv-churn-assumption's job).
+# labeled numeric scenarios, not a token-only heading. Per issue-13 A+
+# upgrade, scenario labels are counted only within the section following
+# a heading matching sensitivity|scenario (survey.md §6, proposal §2 row
+# 5), not the whole document — two scenario labels sitting under an
+# unrelated heading no longer satisfy the check.
+# Does not check the LTV:CAC band (finance-ltv-cac-band's job), CAC
+# payback (finance-cac-payback's job), or the churn/NDR assumption
+# behind LTV (finance-ltv-churn-assumption's job).
+#
+# issue-13 A+ migration: rewired onto core's gate-lib.sh/.py (issue-72) for
+# JSON parsing, path normalization, and Write/Edit/MultiEdit content
+# reconstruction, closing malformed-JSON-silent-allow and
+# MultiEdit-blindness (survey.md §1/§2).
 #
 # Kill switch: export FINANCE_SENSITIVITY_SCENARIO_GATE_OFF=1
+. "${CLAUDE_PLUGIN_ROOT_CORE:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../../core" && pwd -P)}/hooks/lib/gate-lib.sh"
+gate_trap_fail_closed
 set -uo pipefail
+
 deny() { echo "finance-sensitivity-scenario: refused — $1" >&2; exit 2; }
-case "${FINANCE_SENSITIVITY_SCENARIO_GATE_OFF:-}" in ""|0|false|no|off) ;; *) exit 0 ;; esac
+
+gate_kill_switch_active "${FINANCE_SENSITIVITY_SCENARIO_GATE_OFF:-}" || { trap - EXIT; exit 0; }
+
 command -v python3 >/dev/null 2>&1 || deny "requires python3, which is not on PATH; denying rather than guessing."
+
 payload="$(cat 2>/dev/null || true)"
-[ -n "$payload" ] || exit 0
-SS_PAYLOAD="$payload" python3 <<'PY'
-import json, os, re, sys
 
-def deny(msg):
-    sys.stderr.write("finance-sensitivity-scenario: refused — %s\n" % msg)
-    sys.exit(2)
+root="${CLAUDE_PROJECT_DIR:-}"
+[ -n "$root" ] || root="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+[ -n "$root" ] || root="$(pwd -P)"
 
+SS_PAYLOAD="$payload" SS_ROOT="$root" GATE_LIB_PY="$GATE_LIB_PY" python3 <<'PY'
+import sys as _fc_sys
 try:
-    event = json.loads(os.environ.get("SS_PAYLOAD", ""))
-except Exception:
-    sys.exit(0)
-ti = event.get("tool_input") if isinstance(event, dict) else None
-target = None
-if isinstance(ti, dict):
+    import json, os, re, sys, importlib.util
+
+    def deny(msg):
+        sys.stderr.write("finance-sensitivity-scenario: refused — %s\n" % msg)
+        sys.exit(2)
+
+    _spec = importlib.util.spec_from_file_location("gate_lib", os.environ["GATE_LIB_PY"])
+    gate_lib = importlib.util.module_from_spec(_spec)
+    _spec.loader.exec_module(gate_lib)
+
+    event = gate_lib.gate_parse_json_or_deny(os.environ.get("SS_PAYLOAD", ""), deny)
+    tool = event.get("tool_name") or ""
+    ti = event.get("tool_input")
+    if not isinstance(ti, dict):
+        sys.exit(0)
+
+    target = None
     for k in ("file_path", "notebook_path"):
         v = ti.get(k)
-        if isinstance(v, str):
+        if isinstance(v, str) and v:
             target = v
             break
-if not target or not target.replace("\\", "/").endswith("/reports/finance-unit-economics.md"):
+    if target is None:
+        sys.exit(0)
+
+    root = os.environ.get("SS_ROOT", os.getcwd()).replace("\\", "/").rstrip("/") or "/"
+    rel = gate_lib.gate_normalize_path(root, target)
+    if rel is None:
+        sys.exit(0)
+
+    RECORD_RE = re.compile(r'^docs/issue-[0-9]+/reports/finance-unit-economics\.md$')
+    if not RECORD_RE.match(rel):
+        sys.exit(0)
+
+    current = None
+    p = os.path.join(root, rel)
+    if os.path.isfile(p):
+        try:
+            with open(p, encoding="utf-8-sig") as fh:
+                current = fh.read(1 << 20)
+        except OSError:
+            deny("%s exists but cannot be read; failing closed." % rel)
+
+    new_text, ok = gate_lib.gate_reconstruct_write(tool, ti, current)
+    if not ok or new_text is None:
+        deny(
+            "this write targets %s but the gate cannot determine the resulting "
+            "content from the tool input (tool=%r)." % (rel, tool)
+        )
+
+    low = new_text.lower()
+
+    def sections(text):
+        heads = list(re.finditer(r'(?m)^(#{1,6})[ \t]*(.+?)[ \t]*$', text))
+        out = []
+        for i, m in enumerate(heads):
+            level = len(m.group(1))
+            title = m.group(2)
+            start = m.end()
+            end = len(text)
+            for m2 in heads[i + 1:]:
+                if len(m2.group(1)) <= level:
+                    end = m2.start()
+                    break
+            out.append((title, text[start:end]))
+        return out
+
+    if "sensitivity" in low:
+        secs = sections(new_text)
+        sens_body = "\n".join(
+            btext for title, btext in secs if re.search(r'sensitivity|scenario', title, re.I)
+        ).lower()
+        scenario_labels = re.findall(
+            r'\bscenario\s*\d\b|\bbase case\b|\bdownside\b|\bupside\b|\bbull\b|\bbear\b',
+            sens_body,
+        )
+        if len(set(scenario_labels)) < 2:
+            deny(
+                "sensitivity section present with fewer than two labeled numeric "
+                "scenarios WITHIN the sensitivity/scenario section itself. Per "
+                "docs/handbooks/finance-unit-economics/methodology.md, give at "
+                "least two distinct scenarios (e.g. base case vs. downside) inside "
+                "the actual sensitivity section — labels parked under an unrelated "
+                "heading do not count."
+            )
     sys.exit(0)
-
-content = (ti.get("content") or ti.get("new_string") or "") if isinstance(ti, dict) else ""
-low = content.lower()
-
-scenario_labels = re.findall(
-    r'\bscenario\s*\d\b|\bbase case\b|\bdownside\b|\bupside\b|\bbull\b|\bbear\b',
-    low,
-)
-if "sensitivity" in low and len(set(scenario_labels)) < 2:
-    deny(
-        "sensitivity section present with fewer than two labeled numeric "
-        "scenarios. Per docs/handbooks/finance-unit-economics/methodology.md, "
-        "give at least two distinct scenarios (e.g. base case vs. downside) "
-        "— a heading with one scenario, or numbers with no scenario labels, "
-        "is a token-only heading, not the content."
-    )
-sys.exit(0)
+except SystemExit:
+    raise
+except Exception as _fc_e:
+    _fc_sys.stderr.write("sensitivity-scenario-gate.sh: fail-closed: internal error: %r\n" % (_fc_e,))
+    _fc_sys.exit(2)
 PY
 _fc_rc=$?
+if [ "$_fc_rc" -ne 0 ] && [ "$_fc_rc" -ne 2 ]; then
+  echo "finance-sensitivity-scenario: refused — fail-closed: internal error (judge exited $_fc_rc)" >&2
+  exit 2
+fi
 exit "$_fc_rc"
