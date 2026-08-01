@@ -95,4 +95,11 @@ assert_deny "absolute path resolves to same verdict as relative path" \
 assert_allow "path with .. escaping docs/ scope is a no-op, not a match" \
   "$(write_payload "docs/issue-9/proposals/../../elsewhere/methodology-enforcement.md" "$no_source")" CLAUDE_ROLE=finance-unit-economics
 
+missing_core="$(mktemp -d)/no-such-core"
+printf '%s' '{"tool_name":"Write","tool_input":{"file_path":"docs/issue-1/reports/x.md","content":"x"}}' \
+  | env CLAUDE_PROJECT_DIR="$proj" CLAUDE_PLUGIN_ROOT_CORE="$missing_core" bash "$gate" >"$outfile" 2>&1
+rc=$?
+if [ "$rc" = 2 ]; then echo "PASS: CLAUDE_PLUGIN_ROOT_CORE pointed nowhere denies (exit 2), not silent-allow"
+else echo "FAIL: CLAUDE_PLUGIN_ROOT_CORE pointed nowhere must deny (exit 2), got exit $rc"; cat "$outfile"; fail=1; fi
+
 exit "$fail"

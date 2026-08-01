@@ -18,7 +18,7 @@
 # that can spill into an adjacent field's section.
 #
 # Kill switch: export FINANCE_UNIT_ECONOMICS_CYCLE_OFF=1
-. "${CLAUDE_PLUGIN_ROOT_CORE:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../../core" && pwd -P)}/hooks/lib/gate-lib.sh"
+. "${CLAUDE_PLUGIN_ROOT_CORE:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../../core" && pwd -P)}/hooks/lib/gate-lib.sh" || { echo "produces-fields-gate.sh: cannot source gate-lib.sh" >&2; exit 2; }
 gate_trap_fail_closed
 set -uo pipefail
 
